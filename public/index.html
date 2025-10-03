@@ -1,35 +1,94 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
 <head>
-  <title>Imposter Game</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Who's The Imposter — Private Game</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1>Imposter Game</h1>
+  <div id="app" class="container">
+    <header>
+      <h1>Who's The Imposter</h1>
+      <p class="muted">Private link multiplayer — 4–8 players recommended</p>
+    </header>
 
-  <div id="setup">
-    <input id="nameInput" placeholder="Your name">
-    <input id="roomInput" placeholder="Room code">
-    <button id="createBtn">Create Room</button>
-    <button id="joinBtn">Join Room</button>
+    <main id="main">
+      <section id="join" class="card">
+        <label>Your name
+          <input id="nameInput" placeholder="e.g. Chris" />
+        </label>
+
+        <div class="row">
+          <button id="createBtn">Create Room</button>
+          <input id="codeInput" placeholder="Room code (ABCD)" maxlength="6" />
+          <button id="joinBtn">Join Room</button>
+        </div>
+        <p class="muted small">Tip: host creates room and shares the code/link.</p>
+      </section>
+
+      <section id="lobby" class="card hidden">
+        <div class="room-header">
+          <div>Room <span id="roomCode"></span></div>
+          <div>Round: <span id="roundNum">0</span></div>
+        </div>
+
+        <div id="playersList"></div>
+
+        <div class="controls">
+          <button id="startRoundBtn">Start Round</button>
+          <button id="leaveBtn" class="red">Leave Room</button>
+          <button id="endRoundBtn" class="red hidden">End Round (Next)</button>
+        </div>
+
+        <div id="roundControls" class="hidden">
+          <p class="muted small">Round in progress...</p>
+        </div>
+      </section>
+
+      <section id="playArea" class="card hidden">
+        <div id="yourSecret" class="secret card-small">
+          <h3>Your secret</h3>
+          <div id="yourQuestionText"></div>
+          <p class="muted small">Pick one person from the player list as your answer</p>
+          <div id="answerButtons"></div>
+          <div id="submittedMsg" class="muted small hidden">Answer submitted — waiting for others...</div>
+        </div>
+
+        <div id="revealArea" class="hidden">
+          <h3>Majority question</h3>
+          <div id="majorityQuestion" class="bigtext"></div>
+          <h4>Answers</h4>
+          <div id="answersList"></div>
+
+          <div id="votingArea" class="hidden">
+            <p>Discuss, then vote for who you think the Imposter is:</p>
+            <div id="voteButtons"></div>
+          </div>
+
+          <div id="votingResult" class="hidden"></div>
+        </div>
+      </section>
+
+      <section id="howto" class="card">
+        <h3>How to play</h3>
+        <ol>
+          <li>Host creates a room and shares the code/link.</li>
+          <li>Everyone joins and sets their display name.</li>
+          <li>Host starts the round. Everyone gets a secret question (Imposter gets a different one).</li>
+          <li>Each player answers by naming someone in the group.</li>
+          <li>After submissions, the majority question and all answers are revealed.</li>
+          <li>Discuss and vote for the Imposter. Scores update automatically.</li>
+        </ol>
+      </section>
+
+      <footer class="card muted small">
+        Suggestions: use a timer, a chat, or random avatars.
+      </footer>
+    </main>
   </div>
 
-  <div id="lobby" style="display:none;">
-    <h2>Lobby</h2>
-    <div id="players"></div>
-    <button id="startBtn">Start Round</button>
-  </div>
-
-  <div id="secret" style="display:none;">
-    <h2>Your Secret Question:</h2>
-    <p id="secretQuestion"></p>
-    <input id="answerInput" placeholder="Type player name here">
-    <button id="submitBtn">Submit Answer</button>
-  </div>
-
-  <div id="results" style="display:none;"></div>
-
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="client.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script src="client.js"></script>
 </body>
 </html>
