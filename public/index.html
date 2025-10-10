@@ -65,8 +65,12 @@
           <div id="answersList"></div>
 
           <div id="votingArea" class="hidden">
-            <p>Discuss, then vote for who you think the Imposter is:</p>
+            <p>Discuss, then select who you think the Imposter is, then click <b>Submit Vote</b>:</p>
             <div id="voteButtons"></div>
+            <div style="margin-top:8px;">
+              <button id="submitVoteBtn" class="disabled" disabled>Submit Vote</button>
+              <span id="voteCounter" class="muted small" style="margin-left:12px;"></span>
+            </div>
           </div>
 
           <div id="votingResult" class="hidden"></div>
@@ -89,7 +93,8 @@
         <li>Host starts the round — most players get the same majority question; 1 Imposter gets a different question.</li>
         <li>Each player selects one person from the group and clicks <b>Submit Answer</b>.</li>
         <li>When all have submitted, the majority question and answers are revealed to everyone.</li>
-        <li>Discuss and vote to find the Imposter. Host clicks <b>End Round (Next)</b> to start the next round.</li>
+        <li>Discuss and select someone to vote for, then click <b>Submit Vote</b>. All players must vote.</li>
+        <li>After voting completes, the result is revealed. Host clicks <b>End Round (Next)</b> to start the next round.</li>
       </ol>
       <div style="text-align:right;margin-top:12px;">
         <button id="closeModal" class="small-ghost">Close</button>

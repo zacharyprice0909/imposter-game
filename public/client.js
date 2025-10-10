@@ -6,6 +6,7 @@ let players = [];
 let myName = '';
 let lastRoomPublic = null;
 let selectedAnswer = null;
+let selectedVote = null;
 
 // UI refs
 const nameInput = document.getElementById('nameInput');
@@ -33,6 +34,8 @@ const majorityQuestion = document.getElementById('majorityQuestion');
 const answersList = document.getElementById('answersList');
 const votingArea = document.getElementById('votingArea');
 const voteButtons = document.getElementById('voteButtons');
+const submitVoteBtn = document.getElementById('submitVoteBtn');
+const voteCounter = document.getElementById('voteCounter');
 const votingResult = document.getElementById('votingResult');
 const endRoundBtn = document.getElementById('endRoundBtn');
 
@@ -42,8 +45,7 @@ const closeModal = document.getElementById('closeModal');
 
 const errorBox = document.getElementById('errorBox');
 
-// Question bank (same as before)
-const qBank = [
+const qBank = [ /* same questions as before — omitted here for brevity in explanation */
   "Who would most likely survive a zombie apocalypse?",
   "Who is the biggest flirt?",
   "Who is most likely to hook up with a stranger on a night out?",
@@ -187,10 +189,23 @@ submitAnswerBtn.onclick = () => {
   });
 };
 
+submitVoteBtn && (submitVoteBtn.onclick = () => {
+  if(!selectedVote) return showError('Select someone to vote for first.');
+  socket.emit('castVote', { targetSocketId: selectedVote }, (res) => {
+    if(res && res.ok){
+      submitVoteBtn.disabled = true;
+      submitVoteBtn.classList.add('disabled');
+      voteButtons.querySelectorAll('button').forEach(b => b.disabled = true);
+    } else {
+      showError((res && res.error) || 'Vote failed');
+    }
+  });
+});
+
 if(endRoundBtn){
   endRoundBtn.onclick = () => {
     socket.emit('endRound', (res) => {
-      if(!res || !res.ok) showError((res && res.error) || 'End round failed');
+      if(!res || !res.ok) showError((res && res.error) || 'End round failed. Maybe voting not complete?');
     });
   };
 }
@@ -217,6 +232,7 @@ socket.on('roomUpdate', (room) => {
   players = room.players || [];
   showLobby(room);
   updateSubmissionCounter(room.counts);
+  updateVoteCounter(room.counts);
 });
 
 socket.on('roundStarted', ({ yourQuestion, isImposter, roundId }) => {
@@ -232,8 +248,12 @@ socket.on('roundStarted', ({ yourQuestion, isImposter, roundId }) => {
   submittedMsg.classList.add('hidden');
 
   selectedAnswer = null;
+  selectedVote = null;
+
   submitAnswerBtn.disabled = true;
   submitAnswerBtn.classList.add('disabled');
+
+  if(submitVoteBtn){ submitVoteBtn.disabled = true; submitVoteBtn.classList.add('disabled'); }
 
   populateAnswerButtons();
   updateSubmissionCounter(lastRoomPublic && lastRoomPublic.counts);
@@ -249,8 +269,10 @@ socket.on('revealRound', ({ majorityQuestion: mq, answers }) => {
     el.innerHTML = `<div><strong>${escapeHtml(a.fromName)}</strong> answered</div><div>${escapeHtml(a.answer)}</div>`;
     answersList.appendChild(el);
   });
+
   votingArea.classList.remove('hidden');
   populateVoteButtons();
+  updateVoteCounter(lastRoomPublic && lastRoomPublic.counts);
 });
 
 socket.on('votingResult', ({ chosen, chosenName, impostorId, impostorName, impostorCaught }) => {
@@ -272,21 +294,18 @@ socket.on('showError', (msg) => {
 
 socket.on('kicked', ({ message }) => {
   showError(message || 'You were kicked from the room.');
-  // return to main join UI after a short delay
   setTimeout(() => {
     try { socket.disconnect(); } catch(e){}
     resetToJoin();
-  }, 800);
+  }, 700);
 });
-
-socket.on('votingResult', () => updateEndRoundButtonVisibility());
 
 /* ----------------- UI helpers ----------------- */
 
 function showLobby(room){
   const state = room.state || 'lobby';
   if(state === 'lobby'){
-    joinSection.classList.add('hidden');
+    joinSection.classList.remove('hidden');
     lobby.classList.remove('hidden');
     playArea.classList.add('hidden');
   } else {
@@ -362,16 +381,13 @@ function populateVoteButtons(){
       voteButtons.querySelectorAll('button').forEach(x => x.classList.remove('selected'));
       b.classList.add('selected');
 
-      socket.emit('castVote', { targetSocketId: p.id }, (res) => {
-        if(res && res.ok){
-          voteButtons.querySelectorAll('button').forEach(x => x.disabled = true);
-        } else {
-          showError((res && res.error) || 'Vote failed');
-        }
-      });
+      selectedVote = p.id;
+      submitVoteBtn.disabled = false;
+      submitVoteBtn.classList.remove('disabled');
     };
     voteButtons.appendChild(b);
   });
+  if(submitVoteBtn){ submitVoteBtn.disabled = true; submitVoteBtn.classList.add('disabled'); }
 }
 
 function updateEndRoundButtonVisibility(){
@@ -393,6 +409,7 @@ function resetToJoin(){
   playArea.classList.add('hidden');
   currentRoom = null;
   selectedAnswer = null;
+  selectedVote = null;
   lastRoomPublic = null;
 
   revealArea.classList.add('hidden');
@@ -404,12 +421,17 @@ function resetToJoin(){
   answersList.innerHTML = '';
   voteButtons.innerHTML = '';
   submissionCounter.textContent = '';
+  voteCounter.textContent = '';
 }
 
-/* submission counter update (shows X / total) */
+/* submission/vote counter updates */
 function updateSubmissionCounter(counts){
   if(!counts) { submissionCounter.textContent = ''; return; }
   submissionCounter.textContent = `Submitted: ${counts.answers} / ${counts.totalPlayers}`;
+}
+function updateVoteCounter(counts){
+  if(!counts) { voteCounter.textContent = ''; return; }
+  voteCounter.textContent = `Votes: ${counts.votes} / ${counts.totalPlayers}`;
 }
 
 /* error / info in-UI display */

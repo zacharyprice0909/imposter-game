@@ -123,10 +123,12 @@ io.on('connection', socket => {
     const code = socket.roomCode;
     if(!rooms[code] || !rooms[code].roundData) return cb && cb({ ok:false, error:'No active round' });
     const room = rooms[code];
+    // ignore if already answered
+    if(room.roundData.answers[socket.id]) return cb && cb({ ok:false, error:'Already submitted' });
+
     room.roundData.answers[socket.id] = answer;
     io.to(code).emit('roomUpdate', getRoomPublic(code));
 
-    // If all remaining players have answered -> reveal majority question + answers
     const totalPlayers = Object.keys(room.players).length;
     const submitted = Object.keys(room.roundData.answers).length;
     if(submitted >= totalPlayers){
@@ -144,11 +146,14 @@ io.on('connection', socket => {
     const code = socket.roomCode;
     if(!rooms[code] || !rooms[code].roundData) return cb && cb({ ok:false, error:'No active round' });
     const room = rooms[code];
+    // ignore if already voted
+    if(room.roundData.votes[socket.id]) return cb && cb({ ok:false, error:'Already voted' });
+
     room.roundData.votes[socket.id] = targetSocketId;
     room.state = 'voting';
     io.to(code).emit('roomUpdate', getRoomPublic(code));
 
-    // if all remaining players voted -> tally and emit result (host ends round)
+    // if all players voted -> tally and emit result (host ends round afterwards)
     if(Object.keys(room.roundData.votes).length >= Object.keys(room.players).length){
       const tally = {};
       for(const v of Object.values(room.roundData.votes)){
@@ -183,12 +188,13 @@ io.on('connection', socket => {
     cb && cb({ ok:true });
   });
 
-  // host ends round (Next round)
+  // host ends round (Next round) - only allowed after votingResult
   socket.on('endRound', (cb) => {
     const code = socket.roomCode;
     if(!rooms[code]) return cb && cb({ ok:false, error:'Room not found' });
     const room = rooms[code];
     if(room.host !== socket.id) return cb && cb({ ok:false, error:'not host' });
+    if(room.state !== 'votingResult') return cb && cb({ ok:false, error:'Cannot end round yet; voting not complete' });
 
     room.roundData = null;
     room.state = 'lobby';
@@ -210,7 +216,6 @@ io.on('connection', socket => {
     try {
       if(targetSocket){
         targetSocket.emit('kicked', { message: 'You were removed from the room by the host.' });
-        // wait briefly so client receives message, then forcefully disconnect; if client does not disconnect, remove them from room data anyway
         setTimeout(() => {
           try { targetSocket.disconnect(true); } catch(e){ /* ignore */ }
         }, 250);
@@ -221,7 +226,7 @@ io.on('connection', socket => {
     delete room.players[targetId];
     room.order = room.order.filter(id => id !== targetId);
 
-    // If a round was active, to keep things consistent we end the round and notify players.
+    // If a round was active, end it to keep state consistent
     if(room.state !== 'lobby'){
       room.roundData = null;
       room.state = 'lobby';
@@ -229,7 +234,6 @@ io.on('connection', socket => {
       io.to(code).emit('showError', 'Round ended because a player was removed.');
     }
 
-    // update room for everyone else
     io.to(code).emit('roomUpdate', getRoomPublic(code));
     cb && cb({ ok:true });
   });
@@ -277,7 +281,7 @@ io.on('connection', socket => {
       }
 
       // If all remaining players have submitted => reveal
-      if(submitted >= totalPlayers){
+      if(submitted >= totalPlayers && room.state === 'inRound'){
         room.state = 'showing';
         io.to(code).emit('revealRound', {
           majorityQuestion: room.roundData.majorityQuestion,
@@ -286,7 +290,7 @@ io.on('connection', socket => {
       }
 
       // If all remaining players have voted => tally
-      if(votes >= totalPlayers){
+      if(votes >= totalPlayers && (room.state === 'voting' || room.state === 'showing')){
         const tally = {};
         for(const v of Object.values(room.roundData.votes || {})){
           tally[v] = (tally[v]||0) + 1;
