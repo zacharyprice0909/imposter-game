@@ -10,7 +10,10 @@
   <div id="app" class="container">
     <header>
       <h1>Who's The Imposter</h1>
-      <p class="muted">Private link multiplayer — 4–8 players recommended</p>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <button id="howBtn" class="small-ghost">How to play</button>
+        <div id="errorBox" class="error-box hidden"></div>
+      </div>
     </header>
 
     <main id="main">
@@ -24,7 +27,7 @@
           <input id="codeInput" placeholder="Room code (ABCD)" maxlength="6" />
           <button id="joinBtn">Join Room</button>
         </div>
-        <p class="muted small">Tip: host creates room and shares the code/link.</p>
+        <p class="muted small">Host creates a room and shares the code/link with friends.</p>
       </section>
 
       <section id="lobby" class="card hidden">
@@ -40,18 +43,18 @@
           <button id="leaveBtn" class="red">Leave Room</button>
           <button id="endRoundBtn" class="red hidden">End Round (Next)</button>
         </div>
-
-        <div id="roundControls" class="hidden">
-          <p class="muted small">Round in progress...</p>
-        </div>
       </section>
 
       <section id="playArea" class="card hidden">
         <div id="yourSecret" class="secret card-small">
           <h3>Your secret</h3>
           <div id="yourQuestionText"></div>
-          <p class="muted small">Pick one person from the player list as your answer</p>
+          <p class="muted small">Select one person, then click Submit Answer</p>
           <div id="answerButtons"></div>
+          <div style="margin-top:8px">
+            <button id="submitAnswerBtn" class="disabled" disabled>Submit Answer</button>
+            <span id="submissionCounter" class="muted small" style="margin-left:12px;"></span>
+          </div>
           <div id="submittedMsg" class="muted small hidden">Answer submitted — waiting for others...</div>
         </div>
 
@@ -70,22 +73,28 @@
         </div>
       </section>
 
-      <section id="howto" class="card">
-        <h3>How to play</h3>
-        <ol>
-          <li>Host creates a room and shares the code/link.</li>
-          <li>Everyone joins and sets their display name.</li>
-          <li>Host starts the round. Everyone gets a secret question (Imposter gets a different one).</li>
-          <li>Each player answers by naming someone in the group.</li>
-          <li>After submissions, the majority question and all answers are revealed.</li>
-          <li>Discuss and vote for the Imposter. Scores update automatically.</li>
-        </ol>
-      </section>
-
       <footer class="card muted small">
         Suggestions: use a timer, a chat, or random avatars.
       </footer>
     </main>
+  </div>
+
+  <!-- Instructions modal -->
+  <div id="modalOverlay" class="modal hidden">
+    <div class="modal-content">
+      <h2>How to play</h2>
+      <ol>
+        <li>Host creates a room and shares the code or link.</li>
+        <li>Everyone joins and sets a unique name.</li>
+        <li>Host starts the round — most players get the same majority question; 1 Imposter gets a different question.</li>
+        <li>Each player selects one person from the group and clicks <b>Submit Answer</b>.</li>
+        <li>When all have submitted, the majority question and answers are revealed to everyone.</li>
+        <li>Discuss and vote to find the Imposter. Host clicks <b>End Round (Next)</b> to start the next round.</li>
+      </ol>
+      <div style="text-align:right;margin-top:12px;">
+        <button id="closeModal" class="small-ghost">Close</button>
+      </div>
+    </div>
   </div>
 
 <script src="/socket.io/socket.io.js"></script>

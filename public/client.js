@@ -5,7 +5,44 @@ let currentRoom = null;
 let players = [];
 let myName = '';
 let lastRoomPublic = null;
+let selectedAnswer = null;
 
+// UI refs
+const nameInput = document.getElementById('nameInput');
+const createBtn = document.getElementById('createBtn');
+const joinBtn = document.getElementById('joinBtn');
+const codeInput = document.getElementById('codeInput');
+
+const lobby = document.getElementById('lobby');
+const joinSection = document.getElementById('join');
+const roomCodeEl = document.getElementById('roomCode');
+const playersList = document.getElementById('playersList');
+const startRoundBtn = document.getElementById('startRoundBtn');
+const leaveBtn = document.getElementById('leaveBtn');
+const roundNum = document.getElementById('roundNum');
+
+const playArea = document.getElementById('playArea');
+const yourQuestionText = document.getElementById('yourQuestionText');
+const answerButtons = document.getElementById('answerButtons');
+const submitAnswerBtn = document.getElementById('submitAnswerBtn');
+const submittedMsg = document.getElementById('submittedMsg');
+const submissionCounter = document.getElementById('submissionCounter');
+
+const revealArea = document.getElementById('revealArea');
+const majorityQuestion = document.getElementById('majorityQuestion');
+const answersList = document.getElementById('answersList');
+const votingArea = document.getElementById('votingArea');
+const voteButtons = document.getElementById('voteButtons');
+const votingResult = document.getElementById('votingResult');
+const endRoundBtn = document.getElementById('endRoundBtn');
+
+const howBtn = document.getElementById('howBtn');
+const modalOverlay = document.getElementById('modalOverlay');
+const closeModal = document.getElementById('closeModal');
+
+const errorBox = document.getElementById('errorBox');
+
+// Question bank (same as before)
 const qBank = [
   "Who would most likely survive a zombie apocalypse?",
   "Who is the biggest flirt?",
@@ -86,43 +123,20 @@ const qBank = [
   "Who would most likely become a conspiracy theorist?"
 ];
 
-const nameInput = document.getElementById('nameInput');
-const createBtn = document.getElementById('createBtn');
-const joinBtn = document.getElementById('joinBtn');
-const codeInput = document.getElementById('codeInput');
-
-const lobby = document.getElementById('lobby');
-const joinSection = document.getElementById('join');
-const roomCodeEl = document.getElementById('roomCode');
-const playersList = document.getElementById('playersList');
-const startRoundBtn = document.getElementById('startRoundBtn');
-const leaveBtn = document.getElementById('leaveBtn');
-const roundNum = document.getElementById('roundNum');
-
-const playArea = document.getElementById('playArea');
-const yourQuestionText = document.getElementById('yourQuestionText');
-const answerButtons = document.getElementById('answerButtons');
-const submittedMsg = document.getElementById('submittedMsg');
-
-const revealArea = document.getElementById('revealArea');
-const majorityQuestion = document.getElementById('majorityQuestion');
-const answersList = document.getElementById('answersList');
-const votingArea = document.getElementById('votingArea');
-const voteButtons = document.getElementById('voteButtons');
-const votingResult = document.getElementById('votingResult');
-const endRoundBtn = document.getElementById('endRoundBtn');
+/* ----------------- UI events ----------------- */
 
 createBtn.onclick = () => {
   myName = (nameInput.value || 'Player').trim();
+  if(!myName) return showError('Enter a name before creating a room.');
   socket.emit('createRoom', { name: myName }, (res) => {
     if(res && res.ok){
       currentRoom = res.code;
       lastRoomPublic = res.room;
       showLobby(res.room);
       const link = `${location.origin}${location.pathname}?room=${res.code}`;
-      alert('Room created. Share code: ' + res.code + '\nOr share this link: ' + link);
+      showInfo('Room created. Share code: ' + res.code);
     } else {
-      alert((res && res.error) || 'Error creating room');
+      showError((res && res.error) || 'Error creating room');
     }
   });
 };
@@ -130,14 +144,15 @@ createBtn.onclick = () => {
 joinBtn.onclick = () => {
   myName = (nameInput.value || 'Player').trim();
   const code = (codeInput.value || '').trim().toUpperCase();
-  if(!code){ alert('Enter a room code'); return; }
+  if(!code) return showError('Enter a room code to join.');
+  if(!myName) return showError('Enter your name to join.');
   socket.emit('joinRoom', { code, name: myName }, (res) => {
     if(res && res.ok){
       currentRoom = code;
       lastRoomPublic = res.room;
       showLobby(res.room);
     } else {
-      alert((res && res.error) || 'Join failed');
+      showError((res && res.error) || 'Join failed');
     }
   });
 };
@@ -153,19 +168,40 @@ startRoundBtn.onclick = () => {
   let attempts = 0;
   while(impQ === majority && attempts < 25){ impQ = pickRandom(qBank); attempts++; }
   socket.emit('startRound', { questionPair: { majority, imposter: impQ } }, (res) => {
-    if(!res || !res.ok) alert((res && res.error) || 'start failed');
+    if(!res || !res.ok) showError((res && res.error) || 'Start round failed');
+  });
+};
+
+submitAnswerBtn.onclick = () => {
+  if(!selectedAnswer) return showError('Pick someone to answer first.');
+  socket.emit('submitAnswer', { answer: selectedAnswer }, (res) => {
+    if(res && res.ok){
+      submittedMsg.classList.remove('hidden');
+      submitAnswerBtn.disabled = true;
+      submitAnswerBtn.classList.add('disabled');
+      // disable selection buttons
+      answerButtons.querySelectorAll('button').forEach(b => b.disabled = true);
+    } else {
+      showError((res && res.error) || 'Submit failed');
+    }
   });
 };
 
 if(endRoundBtn){
   endRoundBtn.onclick = () => {
     socket.emit('endRound', (res) => {
-      if(!res || !res.ok) alert((res && res.error) || 'end round failed');
+      if(!res || !res.ok) showError((res && res.error) || 'End round failed');
     });
   };
 }
 
-/* Socket handlers */
+/* Instruction modal */
+howBtn.onclick = () => modalOverlay.classList.remove('hidden');
+closeModal.onclick = () => modalOverlay.classList.add('hidden');
+modalOverlay.onclick = (e) => { if(e.target === modalOverlay) modalOverlay.classList.add('hidden'); };
+
+/* ----------------- Socket handlers ----------------- */
+
 socket.on('connect', () => {
   myId = socket.id;
   const params = new URLSearchParams(location.search);
@@ -180,6 +216,7 @@ socket.on('roomUpdate', (room) => {
   lastRoomPublic = room;
   players = room.players || [];
   showLobby(room);
+  updateSubmissionCounter(room.counts);
 });
 
 socket.on('roundStarted', ({ yourQuestion, isImposter, roundId }) => {
@@ -193,7 +230,13 @@ socket.on('roundStarted', ({ yourQuestion, isImposter, roundId }) => {
 
   yourQuestionText.textContent = yourQuestion;
   submittedMsg.classList.add('hidden');
+
+  selectedAnswer = null;
+  submitAnswerBtn.disabled = true;
+  submitAnswerBtn.classList.add('disabled');
+
   populateAnswerButtons();
+  updateSubmissionCounter(lastRoomPublic && lastRoomPublic.counts);
 });
 
 socket.on('revealRound', ({ majorityQuestion: mq, answers }) => {
@@ -215,21 +258,31 @@ socket.on('votingResult', ({ chosen, chosenName, impostorId, impostorName, impos
   votingResult.innerHTML = `<strong>Vote result:</strong> ${escapeHtml(chosenName)} was chosen. <br/>
     <strong>Imposter:</strong> ${escapeHtml(impostorName)}. <br/>
     ${impostorCaught ? '<strong>Group wins this round!</strong>' : '<strong>Imposter wins this round!</strong>'}`;
-
   updateEndRoundButtonVisibility();
 });
 
 socket.on('roundEnded', () => {
-  // after host ends, return to lobby
   resetToJoin();
+  showInfo('Round ended. Host can start a new round.');
 });
 
-socket.on('votingResult', () => {
-  // ensure End Round visibility updated
-  updateEndRoundButtonVisibility();
+socket.on('showError', (msg) => {
+  showError(msg);
 });
 
-/* UI helpers */
+socket.on('kicked', ({ message }) => {
+  showError(message || 'You were kicked from the room.');
+  // return to main join UI after a short delay
+  setTimeout(() => {
+    try { socket.disconnect(); } catch(e){}
+    resetToJoin();
+  }, 800);
+});
+
+socket.on('votingResult', () => updateEndRoundButtonVisibility());
+
+/* ----------------- UI helpers ----------------- */
+
 function showLobby(room){
   const state = room.state || 'lobby';
   if(state === 'lobby'){
@@ -245,17 +298,36 @@ function showLobby(room){
   roomCodeEl.textContent = room.code || '';
   roundNum.textContent = room.round || 0;
 
+  // players list (show kick button to host)
   playersList.innerHTML = '';
   (room.players || []).forEach(p => {
     const div = document.createElement('div');
     div.className = 'playerRow';
-    div.innerHTML = `<div class="playerName">${escapeHtml(p.name)}</div><div class="score">Group:${p.score.group} Imp:${p.score.impostor}</div>`;
+    const nameHtml = `<div class="playerName">${escapeHtml(p.name)}</div>`;
+    const scoreHtml = `<div class="score">Group:${p.score.group} Imp:${p.score.impostor}</div>`;
+    div.innerHTML = nameHtml + scoreHtml;
+
+    // if current user is host, show a small kick button (not on themselves)
+    if(room.host === socket.id && p.id !== socket.id){
+      const kickBtn = document.createElement('button');
+      kickBtn.className = 'small-kick';
+      kickBtn.textContent = 'Kick';
+      kickBtn.onclick = () => {
+        if(!confirm(`Kick ${p.name}?`)) return;
+        socket.emit('kickPlayer', { targetId: p.id }, (res) => {
+          if(!res || !res.ok) showError((res && res.error) || 'Kick failed');
+          else showInfo(`${p.name} was removed`);
+        });
+      };
+      div.appendChild(kickBtn);
+    }
+
     playersList.appendChild(div);
   });
 
   // start only visible to host and only when in lobby
   startRoundBtn.style.display = (room.host === socket.id && state === 'lobby') ? 'inline-block' : 'none';
-  // end round visible only when votingResult shown and host
+
   updateEndRoundButtonVisibility();
 }
 
@@ -267,14 +339,12 @@ function populateAnswerButtons(){
     b.className = 'answerBtn';
     b.textContent = nm;
     b.onclick = () => {
-      socket.emit('submitAnswer', { answer: nm }, (res) => {
-        if(res && res.ok){
-          submittedMsg.classList.remove('hidden');
-          answerButtons.querySelectorAll('button').forEach(bt => bt.disabled = true);
-        } else {
-          alert((res && res.error) || 'Submit failed');
-        }
-      });
+      // select this answer visually
+      answerButtons.querySelectorAll('button').forEach(x => x.classList.remove('selected'));
+      b.classList.add('selected');
+      selectedAnswer = nm;
+      submitAnswerBtn.disabled = false;
+      submitAnswerBtn.classList.remove('disabled');
     };
     answerButtons.appendChild(b);
   });
@@ -288,11 +358,15 @@ function populateVoteButtons(){
     b.className = 'voteBtn';
     b.textContent = p.name;
     b.onclick = () => {
+      // visually indicate selected vote
+      voteButtons.querySelectorAll('button').forEach(x => x.classList.remove('selected'));
+      b.classList.add('selected');
+
       socket.emit('castVote', { targetSocketId: p.id }, (res) => {
         if(res && res.ok){
           voteButtons.querySelectorAll('button').forEach(x => x.disabled = true);
         } else {
-          alert((res && res.error) || 'Vote failed');
+          showError((res && res.error) || 'Vote failed');
         }
       });
     };
@@ -302,7 +376,6 @@ function populateVoteButtons(){
 
 function updateEndRoundButtonVisibility(){
   if(!endRoundBtn) return;
-  // show only if votingResult is visible AND current user is host
   const isVotingResultVisible = !votingResult.classList.contains('hidden');
   const isHost = lastRoomPublic && lastRoomPublic.host === socket.id;
   if(isVotingResultVisible && isHost){
@@ -319,13 +392,49 @@ function resetToJoin(){
   lobby.classList.add('hidden');
   playArea.classList.add('hidden');
   currentRoom = null;
+  selectedAnswer = null;
+  lastRoomPublic = null;
 
   revealArea.classList.add('hidden');
   votingArea.classList.add('hidden');
   votingResult.classList.add('hidden');
   submittedMsg.classList.add('hidden');
 
-  // refresh last room public by requesting one via joining? easiest is to leave UI as simple lobby—server will send roomUpdate for remaining players
+  answerButtons.innerHTML = '';
+  answersList.innerHTML = '';
+  voteButtons.innerHTML = '';
+  submissionCounter.textContent = '';
+}
+
+/* submission counter update (shows X / total) */
+function updateSubmissionCounter(counts){
+  if(!counts) { submissionCounter.textContent = ''; return; }
+  submissionCounter.textContent = `Submitted: ${counts.answers} / ${counts.totalPlayers}`;
+}
+
+/* error / info in-UI display */
+let errorTimeout = null;
+function showError(message){
+  if(!errorBox) return alert(message);
+  errorBox.classList.remove('hidden');
+  errorBox.style.background = 'linear-gradient(180deg,#ffdddd,#ffecec)';
+  errorBox.style.color = '#661111';
+  errorBox.textContent = message;
+  clearTimeout(errorTimeout);
+  errorTimeout = setTimeout(() => {
+    errorBox.classList.add('hidden');
+  }, 6000);
+}
+function showInfo(message){
+  if(!errorBox) return alert(message);
+  errorBox.classList.remove('hidden');
+  errorBox.style.background = 'linear-gradient(180deg,#eef6ff,#dff3ff)';
+  errorBox.style.color = '#033649';
+  errorBox.textContent = message;
+  clearTimeout(errorTimeout);
+  errorTimeout = setTimeout(() => {
+    errorBox.classList.add('hidden');
+  }, 4000);
 }
 
 /* Utilities */

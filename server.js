@@ -28,19 +28,24 @@ function mapAnswersToNames(answers, players){
 function getRoomPublic(code){
   const r = rooms[code];
   if(!r) return null;
+  const answersCount = r.roundData && r.roundData.answers ? Object.keys(r.roundData.answers).length : 0;
+  const votesCount = r.roundData && r.roundData.votes ? Object.keys(r.roundData.votes).length : 0;
+  const totalPlayers = r.players ? Object.keys(r.players).length : 0;
   return {
     code,
     host: r.host,
     players: Object.entries(r.players || {}).map(([id,p]) => ({ id, name: p.name, score: p.score })),
     round: r.round,
     state: r.state,
-    roundData: r.roundData ? { id: r.roundData.id } : null
+    roundData: r.roundData ? { id: r.roundData.id } : null,
+    counts: { answers: answersCount, votes: votesCount, totalPlayers }
   };
 }
 
 io.on('connection', socket => {
   console.log('socket connected', socket.id);
 
+  // create room
   socket.on('createRoom', ({name}, cb) => {
     const code = makeCode(4);
     rooms[code] = {
@@ -59,8 +64,14 @@ io.on('connection', socket => {
     io.to(code).emit('roomUpdate', getRoomPublic(code));
   });
 
+  // join room (checks duplicate names)
   socket.on('joinRoom', ({code, name}, cb) => {
     if(!rooms[code]) return cb && cb({ ok:false, error:'Room not found' });
+    // duplicate name check (case-insensitive)
+    const existingNames = Object.values(rooms[code].players || {}).map(p => p.name.toLowerCase());
+    if(existingNames.includes((name||'').toLowerCase())){
+      return cb && cb({ ok:false, error:'Name already taken in this room. Choose another.' });
+    }
     socket.join(code);
     rooms[code].players[socket.id] = { name: name || 'Player', score: { group:0, impostor:0 } };
     rooms[code].order.push(socket.id);
@@ -115,6 +126,7 @@ io.on('connection', socket => {
     room.roundData.answers[socket.id] = answer;
     io.to(code).emit('roomUpdate', getRoomPublic(code));
 
+    // If all remaining players have answered -> reveal majority question + answers
     const totalPlayers = Object.keys(room.players).length;
     const submitted = Object.keys(room.roundData.answers).length;
     if(submitted >= totalPlayers){
@@ -136,7 +148,7 @@ io.on('connection', socket => {
     room.state = 'voting';
     io.to(code).emit('roomUpdate', getRoomPublic(code));
 
-    // if all voted -> tally and emit result (DO NOT auto-reset; host ends round)
+    // if all remaining players voted -> tally and emit result (host ends round)
     if(Object.keys(room.roundData.votes).length >= Object.keys(room.players).length){
       const tally = {};
       for(const v of Object.values(room.roundData.votes)){
@@ -151,7 +163,6 @@ io.on('connection', socket => {
       const impostorCaught = (chosen === impostorId);
 
       if(impostorCaught){
-        // award group point (increment group's counter on the chosen player's score for display)
         if(room.players[chosen]) room.players[chosen].score.group += 1;
       } else {
         if(room.players[impostorId]) room.players[impostorId].score.impostor += 1;
@@ -172,6 +183,7 @@ io.on('connection', socket => {
     cb && cb({ ok:true });
   });
 
+  // host ends round (Next round)
   socket.on('endRound', (cb) => {
     const code = socket.roomCode;
     if(!rooms[code]) return cb && cb({ ok:false, error:'Room not found' });
@@ -185,9 +197,51 @@ io.on('connection', socket => {
     cb && cb({ ok:true });
   });
 
+  // host kicks a player
+  socket.on('kickPlayer', ({ targetId }, cb) => {
+    const code = socket.roomCode;
+    if(!rooms[code]) return cb && cb({ ok:false, error:'Room not found' });
+    const room = rooms[code];
+    if(room.host !== socket.id) return cb && cb({ ok:false, error:'not host' });
+    if(!room.players[targetId]) return cb && cb({ ok:false, error:'Player not found' });
+
+    // notify the target, then remove them
+    const targetSocket = io.sockets.sockets.get(targetId);
+    try {
+      if(targetSocket){
+        targetSocket.emit('kicked', { message: 'You were removed from the room by the host.' });
+        // wait briefly so client receives message, then forcefully disconnect; if client does not disconnect, remove them from room data anyway
+        setTimeout(() => {
+          try { targetSocket.disconnect(true); } catch(e){ /* ignore */ }
+        }, 250);
+      }
+    } catch(e){ /* ignore */ }
+
+    // remove player from room data
+    delete room.players[targetId];
+    room.order = room.order.filter(id => id !== targetId);
+
+    // If a round was active, to keep things consistent we end the round and notify players.
+    if(room.state !== 'lobby'){
+      room.roundData = null;
+      room.state = 'lobby';
+      io.to(code).emit('roundEnded');
+      io.to(code).emit('showError', 'Round ended because a player was removed.');
+    }
+
+    // update room for everyone else
+    io.to(code).emit('roomUpdate', getRoomPublic(code));
+    cb && cb({ ok:true });
+  });
+
+  // rename (check duplicates)
   socket.on('rename', ({name}, cb) => {
     const code = socket.roomCode;
-    if(!rooms[code] || !rooms[code].players[socket.id]) return cb && cb({ ok:false });
+    if(!rooms[code] || !rooms[code].players[socket.id]) return cb && cb({ ok:false, error:'Room or player not found' });
+    const existingNames = Object.entries(rooms[code].players || {}).filter(([id]) => id !== socket.id).map(([id, p]) => p.name.toLowerCase());
+    if(existingNames.includes((name||'').toLowerCase())){
+      return cb && cb({ ok:false, error:'Name already taken in this room.' });
+    }
     rooms[code].players[socket.id].name = name;
     io.to(code).emit('roomUpdate', getRoomPublic(code));
     cb && cb({ ok:true });
@@ -206,6 +260,60 @@ io.on('connection', socket => {
     if(room.host === socket.id){
       room.host = room.order[0] || null;
     }
+
+    // If a round is active, remove this player's answers & votes then check if remaining players have completed actions.
+    if(room.roundData){
+      delete room.roundData.answers[socket.id];
+      delete room.roundData.votes[socket.id];
+
+      const totalPlayers = Object.keys(room.players).length;
+      const submitted = Object.keys(room.roundData.answers || {}).length;
+      const votes = Object.keys(room.roundData.votes || {}).length;
+
+      // if no players left, delete room
+      if(totalPlayers === 0){
+        delete rooms[code];
+        return;
+      }
+
+      // If all remaining players have submitted => reveal
+      if(submitted >= totalPlayers){
+        room.state = 'showing';
+        io.to(code).emit('revealRound', {
+          majorityQuestion: room.roundData.majorityQuestion,
+          answers: mapAnswersToNames(room.roundData.answers, room.players)
+        });
+      }
+
+      // If all remaining players have voted => tally
+      if(votes >= totalPlayers){
+        const tally = {};
+        for(const v of Object.values(room.roundData.votes || {})){
+          tally[v] = (tally[v]||0) + 1;
+        }
+        let maxVotes = -1;
+        let chosen = null;
+        for(const [k,v] of Object.entries(tally)){
+          if(v > maxVotes){ maxVotes = v; chosen = k; }
+        }
+        const impostorId = room.roundData.imposter;
+        const impostorCaught = (chosen === impostorId);
+        if(impostorCaught){
+          if(room.players[chosen]) room.players[chosen].score.group += 1;
+        } else {
+          if(room.players[impostorId]) room.players[impostorId].score.impostor += 1;
+        }
+        room.state = 'votingResult';
+        io.to(code).emit('votingResult', {
+          chosen,
+          chosenName: room.players[chosen] ? room.players[chosen].name : 'Unknown',
+          impostorId,
+          impostorName: room.players[impostorId] ? room.players[impostorId].name : 'Unknown',
+          impostorCaught
+        });
+      }
+    }
+
     io.to(code).emit('roomUpdate', getRoomPublic(code));
     if(Object.keys(room.players).length === 0) delete rooms[code];
   }
