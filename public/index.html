@@ -16,6 +16,25 @@
       </div>
     </header>
 
+    <!-- How to play modal -->
+    <div id="modalOverlay" class="modal hidden">
+      <div class="modal-content">
+        <h2>How to play</h2>
+        <ol>
+          <li>Host creates a room and shares the code or link.</li>
+          <li>Everyone joins and sets a unique name.</li>
+          <li>Host starts the round — most players get the same majority question; 1 Imposter gets a different question.</li>
+          <li>Each player selects one person from the group and clicks <b>Submit Answer</b>.</li>
+          <li>When all have submitted, the majority question and answers are revealed to everyone.</li>
+          <li>Discuss, select a player, and click <b>Submit Vote</b>. Everyone must vote.</li>
+          <li>After voting completes, the result is revealed. Host clicks <b>End Round (Next)</b> to start the next round.</li>
+        </ol>
+        <div style="text-align:right;margin-top:12px;">
+          <button id="closeModal" class="small-ghost">Close</button>
+        </div>
+      </div>
+    </div>
+
     <main id="main">
       <section id="join" class="card">
         <label>Your name
@@ -81,25 +100,6 @@
         Suggestions: use a timer, a chat, or random avatars.
       </footer>
     </main>
-  </div>
-
-  <!-- Instructions modal -->
-  <div id="modalOverlay" class="modal hidden">
-    <div class="modal-content">
-      <h2>How to play</h2>
-      <ol>
-        <li>Host creates a room and shares the code or link.</li>
-        <li>Everyone joins and sets a unique name.</li>
-        <li>Host starts the round — most players get the same majority question; 1 Imposter gets a different question.</li>
-        <li>Each player selects one person from the group and clicks <b>Submit Answer</b>.</li>
-        <li>When all have submitted, the majority question and answers are revealed to everyone.</li>
-        <li>Discuss and select someone to vote for, then click <b>Submit Vote</b>. All players must vote.</li>
-        <li>After voting completes, the result is revealed. Host clicks <b>End Round (Next)</b> to start the next round.</li>
-      </ol>
-      <div style="text-align:right;margin-top:12px;">
-        <button id="closeModal" class="small-ghost">Close</button>
-      </div>
-    </div>
   </div>
 
 <script src="/socket.io/socket.io.js"></script>

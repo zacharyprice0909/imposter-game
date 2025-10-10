@@ -9,7 +9,8 @@ const path = require('path');
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-const rooms = {}; // in-memory rooms
+// In-memory rooms (non-persistent)
+const rooms = {};
 
 function makeCode(len = 4){
   return crypto.randomBytes(len).toString('base64').replace(/[+/=]/g,'').substr(0,len).toUpperCase();
@@ -43,10 +44,10 @@ function getRoomPublic(code){
 }
 
 io.on('connection', socket => {
-  console.log('socket connected', socket.id);
+  console.log('connect', socket.id);
 
-  // create room
-  socket.on('createRoom', ({name}, cb) => {
+  // Create room
+  socket.on('createRoom', ({ name }, cb) => {
     const code = makeCode(4);
     rooms[code] = {
       host: socket.id,
@@ -64,10 +65,9 @@ io.on('connection', socket => {
     io.to(code).emit('roomUpdate', getRoomPublic(code));
   });
 
-  // join room (checks duplicate names)
-  socket.on('joinRoom', ({code, name}, cb) => {
+  // Join room with duplicate-name check
+  socket.on('joinRoom', ({ code, name }, cb) => {
     if(!rooms[code]) return cb && cb({ ok:false, error:'Room not found' });
-    // duplicate name check (case-insensitive)
     const existingNames = Object.values(rooms[code].players || {}).map(p => p.name.toLowerCase());
     if(existingNames.includes((name||'').toLowerCase())){
       return cb && cb({ ok:false, error:'Name already taken in this room. Choose another.' });
@@ -80,19 +80,18 @@ io.on('connection', socket => {
     io.to(code).emit('roomUpdate', getRoomPublic(code));
   });
 
-  socket.on('leaveRoom', () => {
-    leave(socket);
-  });
+  socket.on('leaveRoom', () => leave(socket));
 
-  socket.on('startRound', ({questionPair}, cb) => {
+  // Start round — host only
+  socket.on('startRound', ({ questionPair }, cb) => {
     const code = socket.roomCode;
     if(!rooms[code]) return cb && cb({ ok:false, error:'Room not found' });
     const room = rooms[code];
-    if(room.host !== socket.id) return cb && cb({ ok:false, error:'not host' });
+    if(room.host !== socket.id) return cb && cb({ ok:false, error:'Only host can start the round' });
     if(room.state !== 'lobby') return cb && cb({ ok:false, error:'Round already in progress' });
 
     const playerCount = Object.keys(room.players).length;
-    if(playerCount < 3) return cb && cb({ ok:false, error:'Need 3+ players to start' });
+    if(playerCount < 3) return cb && cb({ ok:false, error:'Need at least 3 players to start' });
 
     room.round++;
     room.state = 'inRound';
@@ -105,7 +104,7 @@ io.on('connection', socket => {
       votes: {}
     };
 
-    // send role-specific question to each player
+    // Send role-specific questions
     for(const sid of Object.keys(room.players)){
       const roleQuestion = (sid === room.roundData.imposter) ? room.roundData.imposterQuestion : room.roundData.majorityQuestion;
       io.to(sid).emit('roundStarted', {
@@ -119,11 +118,11 @@ io.on('connection', socket => {
     cb && cb({ ok:true });
   });
 
-  socket.on('submitAnswer', ({answer}, cb) => {
+  // Submit answer (one per player)
+  socket.on('submitAnswer', ({ answer }, cb) => {
     const code = socket.roomCode;
     if(!rooms[code] || !rooms[code].roundData) return cb && cb({ ok:false, error:'No active round' });
     const room = rooms[code];
-    // ignore if already answered
     if(room.roundData.answers[socket.id]) return cb && cb({ ok:false, error:'Already submitted' });
 
     room.roundData.answers[socket.id] = answer;
@@ -142,18 +141,18 @@ io.on('connection', socket => {
     cb && cb({ ok:true });
   });
 
-  socket.on('castVote', ({targetSocketId}, cb) => {
+  // Cast vote (one per player)
+  socket.on('castVote', ({ targetSocketId }, cb) => {
     const code = socket.roomCode;
     if(!rooms[code] || !rooms[code].roundData) return cb && cb({ ok:false, error:'No active round' });
     const room = rooms[code];
-    // ignore if already voted
     if(room.roundData.votes[socket.id]) return cb && cb({ ok:false, error:'Already voted' });
 
     room.roundData.votes[socket.id] = targetSocketId;
     room.state = 'voting';
     io.to(code).emit('roomUpdate', getRoomPublic(code));
 
-    // if all players voted -> tally and emit result (host ends round afterwards)
+    // If everyone has voted -> tally
     if(Object.keys(room.roundData.votes).length >= Object.keys(room.players).length){
       const tally = {};
       for(const v of Object.values(room.roundData.votes)){
@@ -182,19 +181,19 @@ io.on('connection', socket => {
         impostorCaught
       });
       io.to(code).emit('roomUpdate', getRoomPublic(code));
-      // DO NOT clear room.roundData - host must call endRound
+      // host must call endRound to clear roundData
     }
 
     cb && cb({ ok:true });
   });
 
-  // host ends round (Next round) - only allowed after votingResult
+  // End round (host only) — only allowed after votingResult
   socket.on('endRound', (cb) => {
     const code = socket.roomCode;
     if(!rooms[code]) return cb && cb({ ok:false, error:'Room not found' });
     const room = rooms[code];
-    if(room.host !== socket.id) return cb && cb({ ok:false, error:'not host' });
-    if(room.state !== 'votingResult') return cb && cb({ ok:false, error:'Cannot end round yet; voting not complete' });
+    if(room.host !== socket.id) return cb && cb({ ok:false, error:'Only host can end the round' });
+    if(room.state !== 'votingResult') return cb && cb({ ok:false, error:'Voting not complete; cannot end round' });
 
     room.roundData = null;
     room.state = 'lobby';
@@ -203,30 +202,27 @@ io.on('connection', socket => {
     cb && cb({ ok:true });
   });
 
-  // host kicks a player
+  // Kick player (host only)
   socket.on('kickPlayer', ({ targetId }, cb) => {
     const code = socket.roomCode;
     if(!rooms[code]) return cb && cb({ ok:false, error:'Room not found' });
     const room = rooms[code];
-    if(room.host !== socket.id) return cb && cb({ ok:false, error:'not host' });
+    if(room.host !== socket.id) return cb && cb({ ok:false, error:'Only host can kick players' });
     if(!room.players[targetId]) return cb && cb({ ok:false, error:'Player not found' });
 
-    // notify the target, then remove them
     const targetSocket = io.sockets.sockets.get(targetId);
     try {
       if(targetSocket){
         targetSocket.emit('kicked', { message: 'You were removed from the room by the host.' });
         setTimeout(() => {
-          try { targetSocket.disconnect(true); } catch(e){ /* ignore */ }
+          try { targetSocket.disconnect(true); } catch(e){ }
         }, 250);
       }
-    } catch(e){ /* ignore */ }
+    } catch(e){}
 
-    // remove player from room data
     delete room.players[targetId];
     room.order = room.order.filter(id => id !== targetId);
 
-    // If a round was active, end it to keep state consistent
     if(room.state !== 'lobby'){
       room.roundData = null;
       room.state = 'lobby';
@@ -238,11 +234,11 @@ io.on('connection', socket => {
     cb && cb({ ok:true });
   });
 
-  // rename (check duplicates)
-  socket.on('rename', ({name}, cb) => {
+  // Rename (duplicate check)
+  socket.on('rename', ({ name }, cb) => {
     const code = socket.roomCode;
     if(!rooms[code] || !rooms[code].players[socket.id]) return cb && cb({ ok:false, error:'Room or player not found' });
-    const existingNames = Object.entries(rooms[code].players || {}).filter(([id]) => id !== socket.id).map(([id, p]) => p.name.toLowerCase());
+    const existingNames = Object.entries(rooms[code].players || {}).filter(([id]) => id !== socket.id).map(([id,p]) => p.name.toLowerCase());
     if(existingNames.includes((name||'').toLowerCase())){
       return cb && cb({ ok:false, error:'Name already taken in this room.' });
     }
@@ -251,9 +247,7 @@ io.on('connection', socket => {
     cb && cb({ ok:true });
   });
 
-  socket.on('disconnect', () => {
-    leave(socket);
-  });
+  socket.on('disconnect', () => leave(socket));
 
   function leave(socket){
     const code = socket.roomCode;
@@ -265,7 +259,6 @@ io.on('connection', socket => {
       room.host = room.order[0] || null;
     }
 
-    // If a round is active, remove this player's answers & votes then check if remaining players have completed actions.
     if(room.roundData){
       delete room.roundData.answers[socket.id];
       delete room.roundData.votes[socket.id];
@@ -274,13 +267,11 @@ io.on('connection', socket => {
       const submitted = Object.keys(room.roundData.answers || {}).length;
       const votes = Object.keys(room.roundData.votes || {}).length;
 
-      // if no players left, delete room
       if(totalPlayers === 0){
         delete rooms[code];
         return;
       }
 
-      // If all remaining players have submitted => reveal
       if(submitted >= totalPlayers && room.state === 'inRound'){
         room.state = 'showing';
         io.to(code).emit('revealRound', {
@@ -289,7 +280,6 @@ io.on('connection', socket => {
         });
       }
 
-      // If all remaining players have voted => tally
       if(votes >= totalPlayers && (room.state === 'voting' || room.state === 'showing')){
         const tally = {};
         for(const v of Object.values(room.roundData.votes || {})){

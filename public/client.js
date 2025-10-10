@@ -8,14 +8,14 @@ let lastRoomPublic = null;
 let selectedAnswer = null;
 let selectedVote = null;
 
-// UI refs
+/* ---------- DOM refs ---------- */
 const nameInput = document.getElementById('nameInput');
 const createBtn = document.getElementById('createBtn');
 const joinBtn = document.getElementById('joinBtn');
 const codeInput = document.getElementById('codeInput');
 
-const lobby = document.getElementById('lobby');
 const joinSection = document.getElementById('join');
+const lobby = document.getElementById('lobby');
 const roomCodeEl = document.getElementById('roomCode');
 const playersList = document.getElementById('playersList');
 const startRoundBtn = document.getElementById('startRoundBtn');
@@ -45,7 +45,8 @@ const closeModal = document.getElementById('closeModal');
 
 const errorBox = document.getElementById('errorBox');
 
-const qBank = [ /* same questions as before — omitted here for brevity in explanation */
+/* ---------- Question bank ---------- */
+const qBank = [
   "Who would most likely survive a zombie apocalypse?",
   "Who is the biggest flirt?",
   "Who is most likely to hook up with a stranger on a night out?",
@@ -125,7 +126,7 @@ const qBank = [ /* same questions as before — omitted here for brevity in expl
   "Who would most likely become a conspiracy theorist?"
 ];
 
-/* ----------------- UI events ----------------- */
+/* ---------- UI events ---------- */
 
 createBtn.onclick = () => {
   myName = (nameInput.value || 'Player').trim();
@@ -137,9 +138,7 @@ createBtn.onclick = () => {
       showLobby(res.room);
       const link = `${location.origin}${location.pathname}?room=${res.code}`;
       showInfo('Room created. Share code: ' + res.code);
-    } else {
-      showError((res && res.error) || 'Error creating room');
-    }
+    } else showError((res && res.error) || 'Error creating room');
   });
 };
 
@@ -153,9 +152,7 @@ joinBtn.onclick = () => {
       currentRoom = code;
       lastRoomPublic = res.room;
       showLobby(res.room);
-    } else {
-      showError((res && res.error) || 'Join failed');
-    }
+    } else showError((res && res.error) || 'Join failed');
   });
 };
 
@@ -182,10 +179,8 @@ submitAnswerBtn.onclick = () => {
       submitAnswerBtn.disabled = true;
       submitAnswerBtn.classList.add('disabled');
       // disable selection buttons
-      answerButtons.querySelectorAll('button').forEach(b => b.disabled = true);
-    } else {
-      showError((res && res.error) || 'Submit failed');
-    }
+      answerButtons.querySelectorAll('button').forEach((b) => b.disabled = true);
+    } else showError((res && res.error) || 'Submit failed');
   });
 };
 
@@ -196,9 +191,7 @@ submitVoteBtn && (submitVoteBtn.onclick = () => {
       submitVoteBtn.disabled = true;
       submitVoteBtn.classList.add('disabled');
       voteButtons.querySelectorAll('button').forEach(b => b.disabled = true);
-    } else {
-      showError((res && res.error) || 'Vote failed');
-    }
+    } else showError((res && res.error) || 'Vote failed');
   });
 });
 
@@ -210,19 +203,17 @@ if(endRoundBtn){
   };
 }
 
-/* Instruction modal */
+/* Modal open/close */
 howBtn.onclick = () => modalOverlay.classList.remove('hidden');
 closeModal.onclick = () => modalOverlay.classList.add('hidden');
 modalOverlay.onclick = (e) => { if(e.target === modalOverlay) modalOverlay.classList.add('hidden'); };
 
-/* ----------------- Socket handlers ----------------- */
+/* ---------- Socket handlers ---------- */
 
 socket.on('connect', () => {
   myId = socket.id;
   const params = new URLSearchParams(location.search);
-  if(params.get('room') && !currentRoom){
-    codeInput.value = params.get('room').toUpperCase();
-  }
+  if(params.get('room') && !currentRoom) codeInput.value = params.get('room').toUpperCase();
 });
 
 socket.on('roomUpdate', (room) => {
@@ -249,10 +240,8 @@ socket.on('roundStarted', ({ yourQuestion, isImposter, roundId }) => {
 
   selectedAnswer = null;
   selectedVote = null;
-
   submitAnswerBtn.disabled = true;
   submitAnswerBtn.classList.add('disabled');
-
   if(submitVoteBtn){ submitVoteBtn.disabled = true; submitVoteBtn.classList.add('disabled'); }
 
   populateAnswerButtons();
@@ -288,9 +277,7 @@ socket.on('roundEnded', () => {
   showInfo('Round ended. Host can start a new round.');
 });
 
-socket.on('showError', (msg) => {
-  showError(msg);
-});
+socket.on('showError', (msg) => showError(msg));
 
 socket.on('kicked', ({ message }) => {
   showError(message || 'You were kicked from the room.');
@@ -300,7 +287,7 @@ socket.on('kicked', ({ message }) => {
   }, 700);
 });
 
-/* ----------------- UI helpers ----------------- */
+/* ---------- UI helpers ---------- */
 
 function showLobby(room){
   const state = room.state || 'lobby';
