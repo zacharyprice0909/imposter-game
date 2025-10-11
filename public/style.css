@@ -1,42 +1,119 @@
 body {
   font-family: Arial, sans-serif;
-  text-align: center;
-  background: #1a1a1a;
-  color: #f5f5f5;
+  background: #fafafa;
   margin: 0;
-  padding: 20px;
+  padding: 0;
+}
+
+.container {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 button {
-  background: #3498db;
+  padding: 8px 14px;
   border: none;
-  padding: 10px 15px;
-  color: white;
-  border-radius: 8px;
-  margin: 5px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: 0.2s;
+  font-weight: 600;
+  background: #007bff;
+  color: white;
 }
 
-button:hover {
-  background: #2980b9;
+button:hover:not(:disabled) {
+  background: #005dc1;
 }
 
-.popup {
+button.red {
+  background: #d9534f;
+}
+
+button.red:hover {
+  background: #b52c2a;
+}
+
+button.small-ghost {
+  background: transparent;
+  border: 1px solid #888;
+  color: #333;
+  font-size: 14px;
+  padding: 6px 10px;
+}
+
+button.small-ghost:hover {
+  background: #f0f0f0;
+}
+
+button.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.muted {
+  color: #666;
+}
+
+.small {
+  font-size: 0.9em;
+}
+
+.error-box {
+  color: #b52c2a;
+  font-weight: bold;
+}
+
+.modal {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0,0,0,0.6);
-  display: none;
-  justify-content: center;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
   align-items: center;
+  justify-content: center;
+  z-index: 999;
 }
 
-.popup-content {
-  background: #2c2c2c;
-  padding: 20px;
-  border-radius: 10px;
-  width: 300px;
+.modal-content {
+  background: #fff;
+  padding: 24px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+}
+
+.secret {
+  background: #eef5ff;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.bigtext {
+  font-size: 1.1em;
+  font-weight: bold;
+}
+
+#answersList, #playersList, #voteButtons, #answerButtons {
+  margin-top: 8px;
+}
+
+.card-small {
+  margin-bottom: 16px;
 }

@@ -1,125 +1,164 @@
 const socket = io();
 
-let roomCode = null;
-let isHost = false;
+const howBtn = document.getElementById("howBtn");
+const modalOverlay = document.getElementById("modalOverlay");
+const closeModal = document.getElementById("closeModal");
 
 const nameInput = document.getElementById("nameInput");
-const roomInput = document.getElementById("roomInput");
+const codeInput = document.getElementById("codeInput");
 const createBtn = document.getElementById("createBtn");
 const joinBtn = document.getElementById("joinBtn");
+
+const joinSection = document.getElementById("join");
+const lobbySection = document.getElementById("lobby");
+const playArea = document.getElementById("playArea");
+
+const roomCodeDisplay = document.getElementById("roomCode");
 const playersList = document.getElementById("playersList");
-const hostControls = document.getElementById("hostControls");
-const startRoundBtn = document.getElementById("startRound");
-const nextRoundBtn = document.getElementById("nextRound");
-const questionBox = document.getElementById("questionBox");
-const voteSection = document.getElementById("voteSection");
-const submitVoteBtn = document.getElementById("submitVote");
-const howToPlayBtn = document.getElementById("howToPlayBtn");
-const popup = document.getElementById("howToPlayPopup");
-const closePopupBtn = document.getElementById("closePopup");
-const voteSelect = document.getElementById("voteSelect");
-const voteProgress = document.getElementById("voteProgress");
+const startRoundBtn = document.getElementById("startRoundBtn");
+const leaveBtn = document.getElementById("leaveBtn");
+const endRoundBtn = document.getElementById("endRoundBtn");
 
-popup.style.display = "none";
+const yourQuestionText = document.getElementById("yourQuestionText");
+const answerButtons = document.getElementById("answerButtons");
+const submitAnswerBtn = document.getElementById("submitAnswerBtn");
+const submittedMsg = document.getElementById("submittedMsg");
 
-howToPlayBtn.addEventListener("click", () => {
-  popup.style.display = "block";
+const revealArea = document.getElementById("revealArea");
+const majorityQuestion = document.getElementById("majorityQuestion");
+const answersList = document.getElementById("answersList");
+const votingArea = document.getElementById("votingArea");
+const voteButtons = document.getElementById("voteButtons");
+const submitVoteBtn = document.getElementById("submitVoteBtn");
+const votingResult = document.getElementById("votingResult");
+
+let currentRoom = "";
+let myName = "";
+let selectedPlayer = "";
+let selectedVote = "";
+
+/* ------------------ Modal Controls ------------------ */
+howBtn.addEventListener("click", () => {
+  modalOverlay.classList.remove("hidden");
 });
 
-closePopupBtn.addEventListener("click", () => {
-  popup.style.display = "none";
+closeModal.addEventListener("click", () => {
+  modalOverlay.classList.add("hidden");
 });
 
-createBtn.onclick = () => {
-  const name = nameInput.value.trim();
-  if (!name) return alert("Enter a name!");
-  socket.emit("createRoom", name, (data) => {
-    roomCode = data.roomCode;
-    isHost = true;
-    showLobby();
-  });
-};
-
-joinBtn.onclick = () => {
-  const name = nameInput.value.trim();
-  const code = roomInput.value.trim().toUpperCase();
-  if (!name || !code) return alert("Enter name and room code!");
-  socket.emit("joinRoom", { roomCode: code, playerName: name }, (res) => {
-    if (res.error) return alert(res.error);
-    roomCode = code;
-    showLobby();
-  });
-};
-
-function showLobby() {
-  document.getElementById("menu").style.display = "none";
-  document.getElementById("lobby").style.display = "block";
-  if (isHost) hostControls.style.display = "block";
-}
-
-socket.on("updatePlayers", (players) => {
-  playersList.innerHTML = "";
-  voteSelect.innerHTML = '<option value="">--Select a player--</option>';
-  players.forEach((p) => {
-    const li = document.createElement("li");
-    li.textContent = p.name;
-    if (isHost && p.id !== socket.id) {
-      const kickBtn = document.createElement("button");
-      kickBtn.textContent = "Kick";
-      kickBtn.onclick = () =>
-        socket.emit("kickPlayer", { roomCode, playerId: p.id });
-      li.appendChild(kickBtn);
-    }
-    playersList.appendChild(li);
-    voteSelect.innerHTML += `<option value="${p.name}">${p.name}</option>`;
-  });
-});
-
-startRoundBtn.onclick = () => socket.emit("startRound", roomCode);
-nextRoundBtn.onclick = () => socket.emit("nextRound", roomCode);
-
-socket.on("roundStarted", ({ secret }) => {
-  questionBox.textContent = secret;
-  questionBox.style.display = "block";
-  voteSection.style.display = "none";
-  nextRoundBtn.style.display = "none";
-});
-
-socket.on("roundEnded", ({ eliminated }) => {
-  questionBox.textContent = `Eliminated: ${eliminated}`;
-  voteSection.style.display = "none";
-  if (isHost) nextRoundBtn.style.display = "block";
-});
-
-socket.on("nextRoundReady", () => {
-  questionBox.style.display = "none";
-  voteSection.style.display = "none";
-});
-
-submitVoteBtn.onclick = () => {
-  const voted = voteSelect.value;
-  if (!voted) return alert("You must select someone to vote for!");
-  socket.emit("submitVote", { roomCode, votedName: voted });
-  voteSection.style.display = "none";
-};
-
-socket.on("voteSubmitted", ({ totalVotes, neededVotes }) => {
-  voteProgress.textContent = `Votes: ${totalVotes}/${neededVotes}`;
-  if (totalVotes === neededVotes) {
-    voteSection.style.display = "none";
+modalOverlay.addEventListener("click", (e) => {
+  if (e.target === modalOverlay) {
+    modalOverlay.classList.add("hidden");
   }
 });
 
-socket.on("roundStatus", ({ active }) => {
-  if (active) voteSection.style.display = "block";
+/* ------------------ Room Logic ------------------ */
+createBtn.addEventListener("click", () => {
+  const name = nameInput.value.trim();
+  if (!name) return alert("Enter your name");
+  socket.emit("createRoom", name);
 });
 
-socket.on("kicked", () => {
-  alert("You were kicked from the game.");
-  window.location.reload();
+joinBtn.addEventListener("click", () => {
+  const name = nameInput.value.trim();
+  const code = codeInput.value.trim().toUpperCase();
+  if (!name || !code) return alert("Enter both name and room code");
+  socket.emit("joinRoom", { name, code });
 });
 
-socket.on("errorMessage", (msg) => {
-  alert(msg);
-  window.location.reload();
+startRoundBtn.addEventListener("click", () => {
+  socket.emit("startRound", currentRoom);
+});
+
+leaveBtn.addEventListener("click", () => {
+  location.reload();
+});
+
+endRoundBtn.addEventListener("click", () => {
+  socket.emit("endRound", currentRoom);
+});
+
+submitAnswerBtn.addEventListener("click", () => {
+  if (!selectedPlayer) return;
+  socket.emit("submitAnswer", { room: currentRoom, name: myName, answer: selectedPlayer });
+  submitAnswerBtn.disabled = true;
+  submitAnswerBtn.classList.add("disabled");
+  submittedMsg.classList.remove("hidden");
+});
+
+submitVoteBtn.addEventListener("click", () => {
+  if (!selectedVote) return;
+  socket.emit("submitVote", { room: currentRoom, name: myName, vote: selectedVote });
+  submitVoteBtn.disabled = true;
+  submitVoteBtn.classList.add("disabled");
+});
+
+/* ------------------ Socket Events ------------------ */
+socket.on("roomCreated", (data) => {
+  myName = data.name;
+  currentRoom = data.room;
+  roomCodeDisplay.textContent = currentRoom;
+  joinSection.classList.add("hidden");
+  lobbySection.classList.remove("hidden");
+});
+
+socket.on("roomJoined", (data) => {
+  myName = data.name;
+  currentRoom = data.room;
+  roomCodeDisplay.textContent = currentRoom;
+  joinSection.classList.add("hidden");
+  lobbySection.classList.remove("hidden");
+});
+
+socket.on("updatePlayers", (players) => {
+  playersList.innerHTML = players.map(p => `<div>${p}</div>`).join("");
+});
+
+socket.on("roundStarted", (data) => {
+  lobbySection.classList.add("hidden");
+  playArea.classList.remove("hidden");
+  yourQuestionText.textContent = data.question;
+  answerButtons.innerHTML = data.players
+    .filter(p => p !== myName)
+    .map(p => `<button class="choiceBtn">${p}</button>`)
+    .join("");
+
+  document.querySelectorAll(".choiceBtn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      selectedPlayer = btn.textContent;
+      document.querySelectorAll(".choiceBtn").forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+      submitAnswerBtn.disabled = false;
+      submitAnswerBtn.classList.remove("disabled");
+    });
+  });
+});
+
+socket.on("showAnswers", (data) => {
+  revealArea.classList.remove("hidden");
+  majorityQuestion.textContent = data.majorityQuestion;
+  answersList.innerHTML = data.answers.map(a => `<div><b>${a.name}:</b> ${a.answer}</div>`).join("");
+  votingArea.classList.remove("hidden");
+
+  voteButtons.innerHTML = data.players
+    .filter(p => p !== myName)
+    .map(p => `<button class="voteBtn">${p}</button>`)
+    .join("");
+
+  document.querySelectorAll(".voteBtn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      selectedVote = btn.textContent;
+      document.querySelectorAll(".voteBtn").forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+      submitVoteBtn.disabled = false;
+      submitVoteBtn.classList.remove("disabled");
+    });
+  });
+});
+
+socket.on("voteResults", (data) => {
+  votingArea.classList.add("hidden");
+  votingResult.classList.remove("hidden");
+  votingResult.innerHTML = `<p><b>${data.imposter}</b> was the imposter!</p>`;
+  endRoundBtn.classList.remove("hidden");
 });
