@@ -10,7 +10,7 @@
   <div id="app" class="container">
     <header>
       <h1>Who's The Imposter</h1>
-      <p class="muted">Private link multiplayer — 4–8 players recommended</p>
+      <p class="muted">Private multiplayer — 4–8 players recommended</p>
     </header>
 
     <main id="main">
@@ -24,7 +24,7 @@
           <input id="codeInput" placeholder="Room code (ABCD)" maxlength="6" />
           <button id="joinBtn">Join Room</button>
         </div>
-        <p class="muted small">Tip: host creates room and shares the code/link.</p>
+        <p class="muted small">Host creates a room and shares the code/link.</p>
       </section>
 
       <section id="lobby" class="card hidden">
@@ -38,7 +38,7 @@
         <div class="controls">
           <button id="startRoundBtn">Start Round</button>
           <button id="leaveBtn" class="red">Leave Room</button>
-          <button id="endRoundBtn" class="red hidden">End Round (Next)</button>
+          <button id="endRoundBtn" class="red hidden">End Round (Back to lobby)</button>
         </div>
 
         <div id="roundControls" class="hidden">
@@ -70,20 +70,20 @@
         </div>
       </section>
 
-      <section id="howto" class="card">
+      <section id="howto" class="card hidden">
         <h3>How to play</h3>
         <ol>
           <li>Host creates a room and shares the code/link.</li>
-          <li>Everyone joins and sets their display name.</li>
+          <li>Everyone joins and sets their display name (names must be unique).</li>
           <li>Host starts the round. Everyone gets a secret question (Imposter gets a different one).</li>
-          <li>Each player answers by naming someone in the group.</li>
-          <li>After submissions, the majority question and all answers are revealed.</li>
-          <li>Discuss and vote for the Imposter. Scores update automatically.</li>
+          <li>Each player selects someone and then clicks "Submit Answer".</li>
+          <li>After all submissions, the majority question and answers are revealed.</li>
+          <li>Discuss and vote for the Imposter. Host may start the next round instantly.</li>
         </ol>
       </section>
 
       <footer class="card muted small">
-        Suggestions: use a timer, a chat, or random avatars.
+        <!-- kept minimal intentionally -->
       </footer>
     </main>
   </div>
