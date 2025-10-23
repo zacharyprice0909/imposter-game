@@ -5,9 +5,9 @@ let players = [];
 let myName = '';
 let lastRoomPublic = null;
 let selectedAnswer = null;
+let selectedVote = null;
 
 const qBank = [
-  // (keep your same bank of questions)
   "Who would most likely survive a zombie apocalypse?",
   "Who is the biggest flirt?",
   "Who is most likely to hook up with a stranger on a night out?",
@@ -117,6 +117,16 @@ const voteButtons = document.getElementById('voteButtons');
 const votingResult = document.getElementById('votingResult');
 const endRoundBtn = document.getElementById('endRoundBtn');
 
+// new elements for voting submit & message
+const submitVoteBtn = document.createElement('button');
+submitVoteBtn.id = 'submitVoteBtn';
+submitVoteBtn.textContent = 'Submit Guess';
+submitVoteBtn.style.display = 'none';
+const submittedVoteMsg = document.createElement('div');
+submittedVoteMsg.id = 'submittedVoteMsg';
+submittedVoteMsg.className = 'muted small hidden';
+submittedVoteMsg.textContent = '✅ Answer Submitted — waiting for others...';
+
 const howtoSection = document.getElementById('howto');
 const howtoBtn = document.createElement('button');
 howtoBtn.id = 'howtoBtn';
@@ -129,6 +139,9 @@ document.body.appendChild(notifyEl);
 
 // insert submit button under answerButtons container
 answerButtons.parentNode.insertBefore(submitAnswerBtn, answerButtons.nextSibling);
+// insert submitVoteBtn & message under voteButtons
+voteButtons.parentNode.insertBefore(submitVoteBtn, voteButtons.nextSibling);
+voteButtons.parentNode.insertBefore(submittedVoteMsg, submitVoteBtn.nextSibling);
 
 createBtn.onclick = () => {
   myName = (nameInput.value || 'Player').trim();
@@ -138,8 +151,7 @@ createBtn.onclick = () => {
       lastRoomPublic = res.room;
       showLobby(res.room);
       const link = `${location.origin}${location.pathname}?room=${res.code}`;
-      showNotify('Room created. Share code: ' + res.code + ' — or this link copied to clipboard.', 6000);
-      // try copy link
+      showNotify('Room created. Share code: ' + res.code + ' — link copied to clipboard.', 6000);
       try { navigator.clipboard?.writeText(link); } catch(e){}
     } else {
       showNotify((res && res.error) || 'Error creating room', 4000, true);
@@ -178,16 +190,13 @@ startRoundBtn.onclick = () => {
 };
 
 if(endRoundBtn){
-  // endRound acts like "back to lobby" (existing)
   endRoundBtn.onclick = () => {
-    // call endRound then show lobby (server will emit roundEnded)
     socket.emit('endRound', (res) => {
       if(!res || !res.ok) showNotify((res && res.error) || 'end round failed', 4000, true);
     });
   };
 }
 
-// Next Round: host can immediately start next, using client's qBank to generate questions
 function hostNextRound(){
   const majority = pickRandom(qBank);
   let impQ = pickRandom(qBank);
@@ -201,7 +210,6 @@ function hostNextRound(){
 /* Socket handlers */
 socket.on('connect', () => {
   myId = socket.id;
-  // insert instructions button near header
   const header = document.querySelector('header');
   if(header && !document.getElementById('howtoBtn')) header.appendChild(howtoBtn);
 
@@ -230,6 +238,7 @@ socket.on('roundStarted', ({ yourQuestion, isImposter, roundId }) => {
 
   yourQuestionText.textContent = yourQuestion;
   submittedMsg.classList.add('hidden');
+  submittedVoteMsg.classList.add('hidden');
   populateAnswerButtons();
 });
 
@@ -253,11 +262,26 @@ socket.on('votingResult', ({ chosen, chosenName, impostorId, impostorName, impos
     <strong>Imposter:</strong> ${escapeHtml(impostorName)}. <br/>
     ${impostorCaught ? '<strong>Group wins this round!</strong>' : '<strong>Imposter wins this round!</strong>'}`;
 
+  // show Next Round for host reliably when server says votingResult
+  if(lastRoomPublic && lastRoomPublic.host === socket.id){
+    // remove existing if present
+    const existing = document.getElementById('nextRoundBtn');
+    if(existing) existing.remove();
+    const controls = document.querySelector('.controls');
+    if(controls){
+      const b = document.createElement('button');
+      b.id = 'nextRoundBtn';
+      b.textContent = 'Next Round';
+      b.onclick = () => hostNextRound();
+      b.className = 'accent';
+      controls.insertBefore(b, controls.firstChild || controls);
+    }
+  }
+
   updateEndRoundButtonVisibility();
 });
 
 socket.on('roundEnded', () => {
-  // after host ends, return to lobby
   resetToJoin();
 });
 
@@ -267,7 +291,6 @@ socket.on('kicked', ({reason}) => {
 });
 
 socket.on('votingResult', () => {
-  // ensure End Round visibility updated
   updateEndRoundButtonVisibility();
 });
 
@@ -298,7 +321,6 @@ function showLobby(room){
     rightDiv.className = 'playerRight';
     rightDiv.innerHTML = `<div class="score">Group:${p.score.group} Imp:${p.score.impostor}</div>`;
 
-    // if host, add Kick button for each other player
     if(room.host === socket.id && p.id !== socket.id){
       const kickBtn = document.createElement('button');
       kickBtn.className = 'mini red kickBtn';
@@ -318,25 +340,12 @@ function showLobby(room){
     playersList.appendChild(div);
   });
 
-  // show start only to host and only in lobby
+  // start only visible to host and only when in lobby
   startRoundBtn.style.display = (room.host === socket.id && state === 'lobby') ? 'inline-block' : 'none';
 
-  // show Next Round button when votingResult visible (host)
-  // We'll use the existing endRoundBtn area for host actions; show Next if votingResult
-  const isVotingResult = room.state === 'votingResult';
-  // create or replace a Next button
+  // ensure Next Round button presence removed if not appropriate
   const nextBtn = document.getElementById('nextRoundBtn');
-  if(nextBtn) nextBtn.remove();
-  if(isVotingResult && room.host === socket.id){
-    const b = document.createElement('button');
-    b.id = 'nextRoundBtn';
-    b.textContent = 'Next Round';
-    b.onclick = () => hostNextRound();
-    b.className = 'accent';
-    // put near controls
-    const controls = document.querySelector('.controls');
-    if(controls) controls.insertBefore(b, controls.firstChild);
-  }
+  if(nextBtn && room.state !== 'votingResult') nextBtn.remove();
 
   updateEndRoundButtonVisibility();
 }
@@ -345,24 +354,21 @@ function populateAnswerButtons(){
   answerButtons.innerHTML = '';
   selectedAnswer = null;
   submitAnswerBtn.style.display = 'none';
-  const finalNames = (players || []).map(p => p.name);
-  finalNames.forEach(nm => {
+  const finalPlayers = (players || []);
+  finalPlayers.forEach(p => {
     const b = document.createElement('button');
     b.className = 'answerBtn';
-    b.textContent = nm;
+    b.textContent = p.name;
     b.onclick = () => {
-      // visually mark selected
       answerButtons.querySelectorAll('button').forEach(bt => bt.classList.remove('selected'));
       b.classList.add('selected');
-      selectedAnswer = nm;
-      // reveal submit button
+      selectedAnswer = p.name;
       submitAnswerBtn.style.display = 'inline-block';
     };
     answerButtons.appendChild(b);
   });
   submittedMsg.classList.add('hidden');
 
-  // submit handler
   submitAnswerBtn.onclick = () => {
     if(!selectedAnswer){ showNotify('Select someone first', 2000, true); return; }
     socket.emit('submitAnswer', { answer: selectedAnswer }, (res) => {
@@ -379,21 +385,35 @@ function populateAnswerButtons(){
 
 function populateVoteButtons(){
   voteButtons.innerHTML = '';
+  selectedVote = null;
+  submitVoteBtn.style.display = 'none';
+  submittedVoteMsg.classList.add('hidden');
+
   (players || []).forEach(p => {
     const b = document.createElement('button');
     b.className = 'voteBtn';
     b.textContent = p.name;
     b.onclick = () => {
-      socket.emit('castVote', { targetSocketId: p.id }, (res) => {
-        if(res && res.ok){
-          voteButtons.querySelectorAll('button').forEach(x => x.disabled = true);
-        } else {
-          showNotify((res && res.error) || 'Vote failed', 3000, true);
-        }
-      });
+      voteButtons.querySelectorAll('button').forEach(bt => bt.classList.remove('selected'));
+      b.classList.add('selected');
+      selectedVote = p.id;
+      submitVoteBtn.style.display = 'inline-block';
     };
     voteButtons.appendChild(b);
   });
+
+  submitVoteBtn.onclick = () => {
+    if(!selectedVote){ showNotify('Select someone to guess', 2000, true); return; }
+    socket.emit('castVote', { targetSocketId: selectedVote }, (res) => {
+      if(res && res.ok){
+        voteButtons.querySelectorAll('button').forEach(bt => bt.disabled = true);
+        submitVoteBtn.style.display = 'none';
+        submittedVoteMsg.classList.remove('hidden');
+      } else {
+        showNotify((res && res.error) || 'Vote submit failed', 3000, true);
+      }
+    });
+  };
 }
 
 function updateEndRoundButtonVisibility(){
@@ -419,8 +439,8 @@ function resetToJoin(){
   votingArea.classList.add('hidden');
   votingResult.classList.add('hidden');
   submittedMsg.classList.add('hidden');
+  submittedVoteMsg.classList.add('hidden');
 
-  // remove next button if exists
   const nextBtn = document.getElementById('nextRoundBtn');
   if(nextBtn) nextBtn.remove();
 }
