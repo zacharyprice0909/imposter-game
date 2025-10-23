@@ -80,7 +80,7 @@ button.red{background:linear-gradient(180deg,var(--danger),#d33);color:white}
 .notify.error{ background: linear-gradient(180deg,var(--danger),#c33); color:white; }
 .muted.small{font-size:0.85rem}
 #submitAnswerBtn, #submitVoteBtn { margin-top:8px; display:inline-block; }
-#submittedVoteMsg { margin-top:8px; color: #9ed99e; font-weight:600; }
+#submittedVoteMsg { margin-top:8px; color: #9ca3af; font-weight:600; }
 @media (max-width:600px){
   .row{flex-direction:column}
   header h1{font-size:1.2rem}

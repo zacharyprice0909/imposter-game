@@ -125,7 +125,7 @@ submitVoteBtn.style.display = 'none';
 const submittedVoteMsg = document.createElement('div');
 submittedVoteMsg.id = 'submittedVoteMsg';
 submittedVoteMsg.className = 'muted small hidden';
-submittedVoteMsg.textContent = '✅ Answer Submitted — waiting for others...';
+submittedVoteMsg.textContent = 'Answer submitted — waiting for others...';
 
 const howtoSection = document.getElementById('howto');
 const howtoBtn = document.createElement('button');
