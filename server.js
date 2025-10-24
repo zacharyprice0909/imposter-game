@@ -51,7 +51,6 @@ io.on('connection', socket => {
       roundData: null
     };
     socket.join(code);
-    // sanitize name
     const nm = (name || 'Player').trim() || 'Player';
     rooms[code].players[socket.id] = { name: nm, score: { group:0, impostor:0 } };
     rooms[code].order.push(socket.id);
@@ -63,7 +62,6 @@ io.on('connection', socket => {
   socket.on('joinRoom', ({code, name}, cb) => {
     if(!rooms[code]) return cb && cb({ ok:false, error:'Room not found' });
     const nmRaw = (name || 'Player').trim() || 'Player';
-    // check duplicate names (case-insensitive)
     const exists = Object.values(rooms[code].players).some(p => p.name.toLowerCase() === nmRaw.toLowerCase());
     if(exists) return cb && cb({ ok:false, error:'Name already taken in this room. Choose another.' });
 
@@ -90,7 +88,6 @@ io.on('connection', socket => {
     const playerCount = Object.keys(room.players).length;
     if(playerCount < 3) return cb && cb({ ok:false, error:'Need 3+ players to start' });
 
-    // start
     room.round++;
     room.state = 'inRound';
     room.roundData = {
@@ -102,7 +99,6 @@ io.on('connection', socket => {
       votes: {}
     };
 
-    // send role-specific question to each player
     for(const sid of Object.keys(room.players)){
       const roleQuestion = (sid === room.roundData.imposter) ? room.roundData.imposterQuestion : room.roundData.majorityQuestion;
       io.to(sid).emit('roundStarted', {
@@ -116,19 +112,16 @@ io.on('connection', socket => {
     cb && cb({ ok:true });
   });
 
-  // nextRound: host can immediately begin a new round (clears previous and starts new)
   socket.on('nextRound', ({questionPair}, cb) => {
     const code = socket.roomCode;
     if(!rooms[code]) return cb && cb({ ok:false, error:'Room not found' });
     const room = rooms[code];
     if(room.host !== socket.id) return cb && cb({ ok:false, error:'Only host can start next round' });
 
-    // allow starting next if currently in votingResult or lobby
     if(!['votingResult','lobby'].includes(room.state)) {
       return cb && cb({ ok:false, error:'Cannot start next round right now' });
     }
 
-    // clear previous round and start new
     room.round++;
     room.state = 'inRound';
     room.roundData = {
@@ -140,7 +133,6 @@ io.on('connection', socket => {
       votes: {}
     };
 
-    // send new questions
     for(const sid of Object.keys(room.players)){
       const roleQuestion = (sid === room.roundData.imposter) ? room.roundData.imposterQuestion : room.roundData.majorityQuestion;
       io.to(sid).emit('roundStarted', {
@@ -189,7 +181,6 @@ io.on('connection', socket => {
     room.state = 'voting';
     io.to(code).emit('roomUpdate', getRoomPublic(code));
 
-    // if all voted -> tally and emit result (DO NOT auto-reset; host ends or uses nextRound)
     if(Object.keys(room.roundData.votes).length >= Object.keys(room.players).length){
       const tally = {};
       for(const v of Object.values(room.roundData.votes)){
@@ -218,7 +209,6 @@ io.on('connection', socket => {
         impostorCaught
       });
       io.to(code).emit('roomUpdate', getRoomPublic(code));
-      // DO NOT clear room.roundData - host may call nextRound or let it remain and call endRound
     }
 
     cb && cb({ ok:true });
@@ -241,7 +231,6 @@ io.on('connection', socket => {
     const code = socket.roomCode;
     if(!rooms[code] || !rooms[code].players[socket.id]) return cb && cb({ ok:false, error:'Not in room' });
     const nm = (name || '').trim() || 'Player';
-    // prevent duplicates
     const exists = Object.entries(rooms[code].players).some(([sid,p]) => sid !== socket.id && p.name.toLowerCase() === nm.toLowerCase());
     if(exists) return cb && cb({ ok:false, error:'Name already taken in room' });
 
@@ -250,7 +239,6 @@ io.on('connection', socket => {
     cb && cb({ ok:true });
   });
 
-  // host kick
   socket.on('kickPlayer', ({targetId}, cb) => {
     const code = socket.roomCode;
     if(!rooms[code]) return cb && cb({ ok:false, error:'Room not found' });
@@ -259,11 +247,9 @@ io.on('connection', socket => {
     if(!room.players[targetId]) return cb && cb({ ok:false, error:'Player not found' });
     if(targetId === socket.id) return cb && cb({ ok:false, error:'Cannot kick yourself' });
 
-    // remove player from room
     delete room.players[targetId];
     room.order = room.order.filter(id => id !== targetId);
 
-    // notify the kicked socket (if connected)
     const targetSocket = io.sockets.sockets.get(targetId);
     if(targetSocket){
       targetSocket.leave(code);
@@ -271,7 +257,6 @@ io.on('connection', socket => {
       targetSocket.emit('kicked', { reason: 'Kicked by host' });
     }
 
-    // reassign host if needed
     if(room.host === targetId){
       room.host = room.order[0] || null;
     }

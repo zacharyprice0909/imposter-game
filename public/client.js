@@ -104,10 +104,6 @@ const playArea = document.getElementById('playArea');
 const yourQuestionText = document.getElementById('yourQuestionText');
 const answerButtons = document.getElementById('answerButtons');
 const submittedMsg = document.getElementById('submittedMsg');
-const submitAnswerBtn = document.createElement('button');
-submitAnswerBtn.id = 'submitAnswerBtn';
-submitAnswerBtn.textContent = 'Submit Answer';
-submitAnswerBtn.style.display = 'none';
 
 const revealArea = document.getElementById('revealArea');
 const majorityQuestion = document.getElementById('majorityQuestion');
@@ -117,31 +113,24 @@ const voteButtons = document.getElementById('voteButtons');
 const votingResult = document.getElementById('votingResult');
 const endRoundBtn = document.getElementById('endRoundBtn');
 
-// new elements for voting submit & message
+const submitAnswerBtn = document.createElement('button');
+submitAnswerBtn.id = 'submitAnswerBtn';
+submitAnswerBtn.textContent = 'Submit Answer';
+submitAnswerBtn.style.display = 'none';
+
 const submitVoteBtn = document.createElement('button');
 submitVoteBtn.id = 'submitVoteBtn';
 submitVoteBtn.textContent = 'Submit Guess';
 submitVoteBtn.style.display = 'none';
-const submittedVoteMsg = document.createElement('div');
-submittedVoteMsg.id = 'submittedVoteMsg';
-submittedVoteMsg.className = 'muted small hidden';
-submittedVoteMsg.textContent = 'Answer submitted — waiting for others...';
 
-const howtoSection = document.getElementById('howto');
-const howtoBtn = document.createElement('button');
-howtoBtn.id = 'howtoBtn';
-howtoBtn.textContent = 'Instructions';
-howtoBtn.style.marginLeft = '8px';
-
+// notification element
 const notifyEl = document.createElement('div');
 notifyEl.id = 'notify';
 document.body.appendChild(notifyEl);
 
-// insert submit button under answerButtons container
+// place submit buttons in DOM
 answerButtons.parentNode.insertBefore(submitAnswerBtn, answerButtons.nextSibling);
-// insert submitVoteBtn & message under voteButtons
 voteButtons.parentNode.insertBefore(submitVoteBtn, voteButtons.nextSibling);
-voteButtons.parentNode.insertBefore(submittedVoteMsg, submitVoteBtn.nextSibling);
 
 createBtn.onclick = () => {
   myName = (nameInput.value || 'Player').trim();
@@ -151,7 +140,7 @@ createBtn.onclick = () => {
       lastRoomPublic = res.room;
       showLobby(res.room);
       const link = `${location.origin}${location.pathname}?room=${res.code}`;
-      showNotify('Room created. Share code: ' + res.code + ' — link copied to clipboard.', 6000);
+      showNotify('Room created. Code: ' + res.code + ' (link copied).', 5000);
       try { navigator.clipboard?.writeText(link); } catch(e){}
     } else {
       showNotify((res && res.error) || 'Error creating room', 4000, true);
@@ -210,9 +199,6 @@ function hostNextRound(){
 /* Socket handlers */
 socket.on('connect', () => {
   myId = socket.id;
-  const header = document.querySelector('header');
-  if(header && !document.getElementById('howtoBtn')) header.appendChild(howtoBtn);
-
   const params = new URLSearchParams(location.search);
   if(params.get('room') && !currentRoom){
     codeInput.value = params.get('room').toUpperCase();
@@ -221,8 +207,9 @@ socket.on('connect', () => {
 
 socket.on('roomUpdate', (room) => {
   if(!room) return;
-  currentRoom = room.code;
+  // keep lastRoomPublic synced first so showLobby can rely on it
   lastRoomPublic = room;
+  currentRoom = room.code;
   players = room.players || [];
   showLobby(room);
 });
@@ -238,7 +225,7 @@ socket.on('roundStarted', ({ yourQuestion, isImposter, roundId }) => {
 
   yourQuestionText.textContent = yourQuestion;
   submittedMsg.classList.add('hidden');
-  submittedVoteMsg.classList.add('hidden');
+  submitVoteBtn.style.display = 'none';
   populateAnswerButtons();
 });
 
@@ -262,20 +249,9 @@ socket.on('votingResult', ({ chosen, chosenName, impostorId, impostorName, impos
     <strong>Imposter:</strong> ${escapeHtml(impostorName)}. <br/>
     ${impostorCaught ? '<strong>Group wins this round!</strong>' : '<strong>Imposter wins this round!</strong>'}`;
 
-  // show Next Round for host reliably when server says votingResult
+  // if host, ensure Next Round button appears in controls
   if(lastRoomPublic && lastRoomPublic.host === socket.id){
-    // remove existing if present
-    const existing = document.getElementById('nextRoundBtn');
-    if(existing) existing.remove();
-    const controls = document.querySelector('.controls');
-    if(controls){
-      const b = document.createElement('button');
-      b.id = 'nextRoundBtn';
-      b.textContent = 'Next Round';
-      b.onclick = () => hostNextRound();
-      b.className = 'accent';
-      controls.insertBefore(b, controls.firstChild || controls);
-    }
+    ensureNextRoundButton();
   }
 
   updateEndRoundButtonVisibility();
@@ -288,10 +264,6 @@ socket.on('roundEnded', () => {
 socket.on('kicked', ({reason}) => {
   showNotify(reason || 'You were kicked from the room', 4000, true);
   resetToJoin();
-});
-
-socket.on('votingResult', () => {
-  updateEndRoundButtonVisibility();
 });
 
 /* UI helpers */
@@ -343,9 +315,13 @@ function showLobby(room){
   // start only visible to host and only when in lobby
   startRoundBtn.style.display = (room.host === socket.id && state === 'lobby') ? 'inline-block' : 'none';
 
-  // ensure Next Round button presence removed if not appropriate
+  // remove Next Round button if not in votingResult or if not host
   const nextBtn = document.getElementById('nextRoundBtn');
-  if(nextBtn && room.state !== 'votingResult') nextBtn.remove();
+  if(nextBtn){
+    if(room.state !== 'votingResult' || room.host !== socket.id){
+      nextBtn.remove();
+    }
+  }
 
   updateEndRoundButtonVisibility();
 }
@@ -373,7 +349,8 @@ function populateAnswerButtons(){
     if(!selectedAnswer){ showNotify('Select someone first', 2000, true); return; }
     socket.emit('submitAnswer', { answer: selectedAnswer }, (res) => {
       if(res && res.ok){
-        submittedMsg.classList.remove('hidden');
+        // same message used for both phases
+        showSubmittedMessage();
         answerButtons.querySelectorAll('button').forEach(bt => bt.disabled = true);
         submitAnswerBtn.style.display = 'none';
       } else {
@@ -387,7 +364,7 @@ function populateVoteButtons(){
   voteButtons.innerHTML = '';
   selectedVote = null;
   submitVoteBtn.style.display = 'none';
-  submittedVoteMsg.classList.add('hidden');
+  submittedMsg.classList.add('hidden'); // reuse same message element for vote submitted
 
   (players || []).forEach(p => {
     const b = document.createElement('button');
@@ -408,12 +385,34 @@ function populateVoteButtons(){
       if(res && res.ok){
         voteButtons.querySelectorAll('button').forEach(bt => bt.disabled = true);
         submitVoteBtn.style.display = 'none';
-        submittedVoteMsg.classList.remove('hidden');
+        // show same submitted message
+        showSubmittedMessage();
       } else {
         showNotify((res && res.error) || 'Vote submit failed', 3000, true);
       }
     });
   };
+}
+
+function showSubmittedMessage(){
+  submittedMsg.classList.remove('hidden');
+  submittedMsg.textContent = '✅ Answer Submitted — waiting for others...';
+  submittedMsg.style.color = '#9ed99e';
+  submittedMsg.style.fontWeight = '600';
+}
+
+function ensureNextRoundButton(){
+  const existing = document.getElementById('nextRoundBtn');
+  if(existing) return;
+  const controls = document.querySelector('.controls');
+  if(controls){
+    const b = document.createElement('button');
+    b.id = 'nextRoundBtn';
+    b.textContent = 'Next Round';
+    b.onclick = () => hostNextRound();
+    b.className = 'accent';
+    controls.insertBefore(b, controls.firstChild || controls);
+  }
 }
 
 function updateEndRoundButtonVisibility(){
@@ -439,7 +438,6 @@ function resetToJoin(){
   votingArea.classList.add('hidden');
   votingResult.classList.add('hidden');
   submittedMsg.classList.add('hidden');
-  submittedVoteMsg.classList.add('hidden');
 
   const nextBtn = document.getElementById('nextRoundBtn');
   if(nextBtn) nextBtn.remove();
@@ -459,14 +457,3 @@ function showNotify(msg, timeout = 3500, isError = false){
     }, timeout);
   }
 }
-
-/* Instructions toggle */
-howtoBtn.onclick = () => {
-  if(!howtoSection) return;
-  howtoSection.classList.toggle('hidden');
-  if(!howtoSection.classList.contains('hidden')){
-    howtoBtn.textContent = 'Hide Instructions';
-  } else {
-    howtoBtn.textContent = 'Instructions';
-  }
-};

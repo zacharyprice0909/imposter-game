@@ -2,10 +2,14 @@
   --bg:#0f1724;
   --card:#111827;
   --accent:#7dd3fc;
+  --accent-2:#7cdbb6;
   --muted:#9ca3af;
   --danger:#ef4444;
   --glass: rgba(255,255,255,0.03);
   --accent-contrast: #012;
+  --selected-bg: linear-gradient(180deg, rgba(125,211,252,0.95), rgba(63,176,217,0.95));
+  --selected-color: #012;
+  --submit-color: #9ed99e;
 }
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -57,19 +61,24 @@ button.red{background:linear-gradient(180deg,var(--danger),#d33);color:white}
 }
 .answerBtn:hover{ transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.6); }
 .answerBtn.selected{
-  background: linear-gradient(180deg, rgba(125,211,252,0.95), rgba(63,176,217,0.95));
-  color: #012;
+  background: var(--selected-bg);
+  color: var(--selected-color);
   border: none;
   box-shadow: 0 6px 18px rgba(0,0,0,0.6);
 }
 .bigtext{font-size:1.05rem;font-weight:700;margin:8px 0}
 #answersList{display:flex;flex-direction:column;gap:8px;margin:8px 0}
 .answerItem{padding:8px;border-radius:8px;background:rgba(255,255,255,0.02);display:flex;justify-content:space-between}
-.voteBtn{padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:#0b1220;cursor:pointer;color:#f8fbff}
+.voteBtn{
+  padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:#0b1220;cursor:pointer;color:#f8fbff;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
 .voteBtn:hover{ transform: translateY(-2px); }
 .voteBtn.selected{
-  background: linear-gradient(180deg, rgba(255,183,77,0.95), rgba(255,150,50,0.95));
-  color:#012;border:none;
+  background: var(--selected-bg);
+  color: var(--selected-color);
+  border: none;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.6);
 }
 .mini{padding:6px 8px;border-radius:8px;font-size:0.85rem}
 .kickBtn{background:transparent;border:1px solid rgba(255,255,255,0.06);cursor:pointer;color:#f8fbff}
@@ -80,7 +89,7 @@ button.red{background:linear-gradient(180deg,var(--danger),#d33);color:white}
 .notify.error{ background: linear-gradient(180deg,var(--danger),#c33); color:white; }
 .muted.small{font-size:0.85rem}
 #submitAnswerBtn, #submitVoteBtn { margin-top:8px; display:inline-block; }
-#submittedVoteMsg { margin-top:8px; color: #9ca3af; font-weight:600; }
+#submittedMsg { margin-top:8px; color: var(--submit-color); font-weight:600; }
 @media (max-width:600px){
   .row{flex-direction:column}
   header h1{font-size:1.2rem}
